@@ -1,3 +1,2 @@
-# RNASeq_pipeline
-
-A bash script to run the RNA seq pipeline from fastqc on raw sequencing output reads all the way to featureCounts.
+Still in development :)
+Each file contains instructions to run different bioinformatics analysis pipelines
