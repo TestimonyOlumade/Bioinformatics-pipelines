@@ -1,0 +1,221 @@
+---
+title: "DESeq_on_bulk_RNASeq_data"
+author: "Testimony_J_Olumade"
+date: "2022-12-17"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## install required packages
+```{r}
+
+# BiocManager::install("DESeq2")
+library(DESeq2)
+
+# install.packages('tidyverse')
+library(tidyverse)
+
+# BiocManager::install("airway")
+# the airway package is designed to contain functions and data on airway smooth muscle cells
+library(airway)
+
+```
+
+
+
+## Prepare count data
+```{r}
+
+# this refers to the output from gene quantification in the RNASeq workflow
+# DESeq requires aw un-normalized read counts 
+# it performs its own set of normalization steps
+# read the data into R
+
+counts_data <- read.csv('path_to_counts_data.csv')
+
+# from the 'counts_data' file, it is not possible to determine sample groups
+# (whether treated/untreated; healthy/diseased)
+# read in sample info
+
+colData <- read.csv('path_to_sample_info.csv')
+view(colData)
+
+# it is important to ensure that the rownames in colData match column names in counts_data
+# otherwise DESeq will return an error
+
+all(colnames(counts_data) %in% rownames(colData))
+
+# it is also important to ensure that they are in the same order
+
+all(colnames(counts_data) == rownames(colData))
+
+# then construct DESeqDataSet (dds) object
+# this will depend on the method through which the counts file generated
+
+# creating dds object from a matrix file
+# assume the name of column in sample_info that explains the treatment of samples is labelled 'treatment'
+
+dds <- DESeqDataSetFromMatrix(countData = counts_data,
+                       colData = colData,
+                       design = ~ treatment)
+
+#creating dds object from HTSeq count
+
+dds <- DESeqDataSetFromHTSeqCount(sampleTable,
+                           directory = ".",
+                           design = ~ treatment)
+
+# for more info on the code
+# ??DESeqDataSetFromMatrix
+```
+
+
+## pre-filtering
+```{r}
+
+# remove rows with low gene counts
+# this is not required but recommended
+# keep rows that have at least 10 reads in total
+# there are no methods to find the threshold. 10 is the default in the package vignette
+# it all depends on how relaxed or stringent you want to be while filtering
+# NOTE: higher threshold might filter out genes that may be differentially expressed 
+# but are not highly expressed
+
+keep <- rowSums(counts(dds)) >= 10
+
+# use the logical values to subset the dds object
+
+dds <- dds[keep,]
+```
+
+
+## set factor level
+```{r}
+
+# if the goal of the exp is to compare untreated with treated samples
+# you have a two-level factor for 'treatment'
+# in this case, DESeq needs to recognize a 'reference' level for which to compare
+# the other level(s)
+# if reference level is not specified, DESeq will alphabetically choose a ref
+
+dds$treatment <- relevel(dds$treatment, 
+                         ref = "untreated")
+
+# the result is a two-level comparison list
+
+dds$treatment
+
+```
+
+
+## run DESeq
+```{r}
+
+# DESeq will:
+# estimate size factors
+# estimate dispersions
+# estimate gene-wise dispersion
+# estimate final dispersion
+# fit model
+
+dds <- DESeq(dds)
+
+# NOTE: if your experiment has technical replicates, 
+# they should be collapsed before running gene expression analyses
+# the function 'collapseReplicates' performs this step
+# be careful to only collapse technical replicates and not biological replicates
+# technical replicates - multiple sequencing runs of the same library
+# biological replicates - multiple libraries prepared from separate biological units
+
+# ??collapseReplicates
+
+# collapseReplicates(object, groupby, run)
+
+# save results from DESeq
+
+res <- results(dds)
+
+# should include the log2 fold change between treated vs untreated
+# baseMean - average of normalized counts across all samples
+# log2FoldChange - fold change of the gene in treated vs untreated
+# lfcSE - standard error estimates for log2FoldChange
+# stat - Wald test values for the genes
+# p-value - p-value of test statistic
+# padj - corrected p-value for multiple testing to avoid the detection of false positives
+```
+
+
+## explore results
+```{r}
+
+summary(res)
+
+# DESeq uses a default adjusted p-value of < 0.1
+# this can, however, be adjusted
+
+res0.01 <- results(dds, alpha = 0.01)
+
+# view difference in the proportion of up- and down-regulated genes
+summary(res0.01)
+
+```
+
+
+## contrasts
+```{r}
+
+resultsNames(dds)
+
+# in case there are multiple levels with treatments
+# e.g.: treated_4hrs, treated_8hrs, untreated
+# and the aim is to compare each of the different treatment levels with untreated
+# run contrast
+
+results(dds, contrast = c("treatment", "treated_4hrs", "untreated"))
+
+# this will return the up- and down- regulated genes in the treated_4hrs level
+# compared with the untreated reference level
+
+```
+
+
+## visualize DE genes
+```{r}
+
+# create an MA plot
+
+plotMA(res)
+
+# a scatter plot of the log2FoldChange vs the mean of normalized counts
+# those in BLUE are significantly differentially expressed with p < 0.05
+# the triangles towards the edge of the plot indicate the genes that have higher
+# fold changes, with the direction showing the direction of fold change
+
+# volcano plots can also be plotted
+```
+
+
+## identifying DE genes
+To identify DE genes, the results can be sorted by the largest fold changes and
+lowest adjusted p-values. The first 10 genes will be the most differentially expressed
+genes. 
+If sorted descending, the most up-regulated genes are top of the list
+If sorted ascending, the most down-regulated genes are top of the list
+If you wish to get top differentially expressed genes irrespective of the direction,
+you can sort by taking absolute log fold change values
+
+
+## export DESeq results
+```{r}
+
+write.csv(as.data.frame(results),
+          file = "results.csv")
+```
+
+
+
