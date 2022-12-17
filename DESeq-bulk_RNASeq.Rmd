@@ -26,8 +26,6 @@ library(airway)
 
 ```
 
-
-
 ## Prepare count data
 ```{r}
 
