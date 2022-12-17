@@ -115,7 +115,7 @@ duration = $SECONDS
 
 echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
 
-#returns the time taken to complete the analysis.
+# returns the time taken to complete the analysis.
 
 
 
